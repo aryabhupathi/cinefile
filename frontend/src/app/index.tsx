@@ -195,6 +195,12 @@ export default function App() {
 
   const toggleWatchlist = async (movie: any) => {
     if (isReadOnly) return Alert.alert("You are viewing a shared watchlist.");
+    if (!session) {
+       Alert.alert("Login Required", "Please login to save movies to your watchlist.");
+       setActiveTab('profile');
+       return;
+    }
+    
     const exists = watchlist.find(item => item.id === movie.id);
     if (exists) {
       const newWatchlist = watchlist.filter(item => item.id !== movie.id);
@@ -405,8 +411,7 @@ export default function App() {
   };
 
 
-  if (!session && !sharedUserId) {
-    return (
+  const renderAuthUI = () => (
       <View style={styles.authContainer}>
         <Text style={styles.authTitle}>CINEFILE</Text>
         <Text style={styles.authSub}>Your Cinematic Journey Starts Here</Text>
@@ -430,8 +435,12 @@ export default function App() {
           )}
         </View>
       </View>
-    );
-  }
+  );
+
+  const handleLogout = async () => {
+     await supabase.auth.signOut();
+     setActiveTab('discover');
+  };
 
   const isQueryEmpty = query.trim().length <= 2;
   const rawListData = activeTab === 'watchlist' 
@@ -731,21 +740,25 @@ export default function App() {
             )}
 
             {activeTab === 'profile' && !isReadOnly && (
-               <View style={styles.profileContainer}>
-                  <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{formattedName.charAt(0)}</Text></View>
-                  <Text style={styles.profileName}>Welcome, {formattedName}</Text>
-                  <Text style={styles.profileStats}>You have {watchlist.length} titles saved in your watchlist.</Text>
-                  
-                  <View style={{flexDirection: 'row', gap: 16}}>
-                     <TouchableOpacity style={styles.shareBtn} onPress={copyShareLink}>
-                        <Text style={styles.shareBtnText}>🔗 Share Watchlist</Text>
-                     </TouchableOpacity>
-                     <TouchableOpacity style={styles.logoutBtn} onPress={() => supabase.auth.signOut()}>
-                        <Text style={styles.logoutBtnText}>Sign Out</Text>
-                     </TouchableOpacity>
+               session ? (
+                  <View style={styles.profileContainer}>
+                     <View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{formattedName.charAt(0)}</Text></View>
+                     <Text style={styles.profileName}>Welcome, {formattedName}</Text>
+                     <Text style={styles.profileStats}>You have {watchlist.length} titles saved in your watchlist.</Text>
+                     
+                     <View style={{flexDirection: 'row', gap: 16}}>
+                        <TouchableOpacity style={styles.shareBtn} onPress={copyShareLink}>
+                           <Text style={styles.shareBtnText}>🔗 Share Watchlist</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+                           <Text style={styles.logoutBtnText}>Sign Out</Text>
+                        </TouchableOpacity>
+                     </View>
                   </View>
-               </View>
+               ) : renderAuthUI()
             )}
+
+            {activeTab === 'watchlist' && !session && !sharedUserId && renderAuthUI()}
 
             {activeTab === 'discover' && isQueryEmpty && !isReadOnly && (
                <View style={styles.filtersWrapper}>
@@ -773,7 +786,7 @@ export default function App() {
                </View>
             )}
 
-            {activeTab === 'watchlist' && watchlist.length > 0 && (
+            {activeTab === 'watchlist' && watchlist.length > 0 && session && (
                <View style={styles.filtersWrapper}>
                   <View style={{flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap'}}>
                      <View style={styles.segmentedControl}>
