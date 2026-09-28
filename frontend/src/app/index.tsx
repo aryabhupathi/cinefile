@@ -80,7 +80,8 @@ export default function App() {
   const [showLangDropdown, setShowLangDropdown] = useState(false);
 
   const [showAlerts, setShowAlerts] = useState(false);
-  const [notifications, setNotifications] = useState<string[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
   // --- INIT & AUTHENTICATION ---
   useEffect(() => {
@@ -161,7 +162,6 @@ export default function App() {
     if (data) {
       const savedItems = data.map(row => row.movie_data);
       setWatchlist(savedItems);
-      generateAlerts(savedItems);
       
       savedItems.forEach(async (item) => {
          if (!item.providers) {
@@ -178,19 +178,33 @@ export default function App() {
     }
   };
 
-  const generateAlerts = (items: any[]) => {
+  useEffect(() => {
     const now = new Date();
-    const alerts: string[] = [];
-    items.forEach(item => {
+    const alerts: any[] = [];
+    watchlist.forEach(item => {
       const title = item.title || item.name;
       const releaseStr = item.release_date || item.first_air_date;
       if (releaseStr) {
         const diffDays = (now.getTime() - new Date(releaseStr).getTime()) / (1000 * 3600 * 24);
-        if (diffDays >= 0 && diffDays <= 14) alerts.push(`🔥 "${title}" just released!`);
-        else if (diffDays < 0 && diffDays >= -14) alerts.push(`⏰ "${title}" releases in ${Math.ceil(Math.abs(diffDays))} days!`);
+        let alertId = '';
+        let text = '';
+        if (diffDays >= 0 && diffDays <= 14) {
+           alertId = item.id + '-rel';
+           text = `🔥 "${title}" just released!`;
+        } else if (diffDays < 0 && diffDays >= -14) {
+           alertId = item.id + '-upc';
+           text = `⏰ "${title}" releases in ${Math.ceil(Math.abs(diffDays))} days!`;
+        }
+        if (alertId && !dismissedAlerts.includes(alertId)) {
+           alerts.push({ id: alertId, text });
+        }
       }
     });
     setNotifications(alerts);
+  }, [watchlist, dismissedAlerts]);
+
+  const dismissAlert = (id: string) => {
+    setDismissedAlerts(prev => [...prev, id]);
   };
 
   const toggleWatchlist = async (movie: any) => {
@@ -205,12 +219,10 @@ export default function App() {
     if (exists) {
       const newWatchlist = watchlist.filter(item => item.id !== movie.id);
       setWatchlist(newWatchlist);
-      generateAlerts(newWatchlist);
       await supabase.from('watchlist').delete().eq('user_id', session.user.id).eq('movie_id', movie.id);
     } else {
       const newWatchlist = [movie, ...watchlist];
       setWatchlist(newWatchlist);
-      generateAlerts(newWatchlist);
       await supabase.from('watchlist').insert({ user_id: session.user.id, movie_id: movie.id, movie_data: movie });
     }
     
@@ -234,13 +246,19 @@ export default function App() {
 
   const fetchDiscover = async () => {
     setIsDiscovering(true);
-    let url = `https://api.themoviedb.org/3/discover/${discoverType}?include_adult=false&sort_by=popularity.desc`;
-    if (discoverGenre) url += `&with_genres=${discoverGenre}`;
-    if (discoverLang) url += `&with_original_language=${discoverLang}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}` } });
-    const data = await res.json();
-    setDiscoverResults((data.results || []).map((item: any) => ({ ...item, media_type: discoverType })));
-    setIsDiscovering(false);
+    try {
+       let url = `https://api.themoviedb.org/3/discover/${discoverType}?include_adult=false&sort_by=popularity.desc`;
+       if (discoverGenre) url += `&with_genres=${discoverGenre}`;
+       if (discoverLang) url += `&with_original_language=${discoverLang}`;
+       const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}` } });
+       const data = await res.json();
+       setDiscoverResults((data.results || []).map((item: any) => ({ ...item, media_type: discoverType })));
+    } catch (error) {
+       console.error("TMDB Fetch Error:", error);
+       Alert.alert("Network Error", "Could not connect to the movie database. Your ISP might be blocking TMDB.");
+    } finally {
+       setIsDiscovering(false);
+    }
   };
 
   useEffect(() => {
@@ -253,11 +271,16 @@ export default function App() {
 
   const fetchSearch = async (searchQuery: string) => {
     setIsSearching(true);
-    const langPrefix = speechLanguage.split('-')[0];
-    const res = await fetch(`https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(searchQuery)}&include_adult=false&language=${langPrefix}`, { headers: { Authorization: `Bearer ${TMDB_TOKEN}` } });
-    const data = await res.json();
-    setSearchResults((data.results || []).filter((i: any) => i.media_type === 'movie' || i.media_type === 'tv').slice(0, 16));
-    setIsSearching(false);
+    try {
+       const langPrefix = speechLanguage.split('-')[0];
+       const res = await fetch(`https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(searchQuery)}&include_adult=false&language=${langPrefix}`, { headers: { Authorization: `Bearer ${TMDB_TOKEN}` } });
+       const data = await res.json();
+       setSearchResults((data.results || []).filter((i: any) => i.media_type === 'movie' || i.media_type === 'tv').slice(0, 16));
+    } catch (error) {
+       console.error("TMDB Search Error:", error);
+    } finally {
+       setIsSearching(false);
+    }
   };
 
   const extractProviders = (data: any) => {
@@ -293,11 +316,21 @@ export default function App() {
   const openProvider = (name: string, title: string) => {
     const q = encodeURIComponent(title);
     const nl = name.toLowerCase();
+    
+    // Default fallback to Google Search (opens in browser)
     let url = `https://www.google.com/search?q=${q}+on+${encodeURIComponent(name)}`;
+    
+    // Direct Universal App Links (Intercepted by Native Apps if installed)
     if (nl.includes('netflix')) url = `https://www.netflix.com/search?q=${q}`;
-    else if (nl.includes('amazon') || nl.includes('prime')) url = `https://www.amazon.com/s?k=${q}&i=instant-video`;
-    else if (nl.includes('hotstar')) url = `https://www.hotstar.com/in/explore?search_query=${q}`;
+    else if (nl.includes('amazon') || nl.includes('prime')) url = `https://www.primevideo.com/search/ref=atv_sr_sug_1?phrase=${q}`;
+    else if (nl.includes('hotstar') || nl.includes('disney')) url = `https://www.hotstar.com/in/explore?search_query=${q}`;
     else if (nl.includes('jiocinema')) url = `https://www.jiocinema.com/search?q=${q}`;
+    else if (nl.includes('apple')) url = `https://tv.apple.com/search?term=${q}`;
+    else if (nl.includes('zee5')) url = `https://www.zee5.com/search?q=${q}`;
+    else if (nl.includes('sonyliv')) url = `https://www.sonyliv.com/search?query=${q}`;
+    else if (nl.includes('hulu')) url = `https://www.hulu.com/search?q=${q}`;
+    else if (nl.includes('max') || nl.includes('hbo')) url = `https://play.max.com/search?q=${q}`;
+    
     Linking.openURL(url);
   };
 
@@ -439,6 +472,9 @@ export default function App() {
 
   const handleLogout = async () => {
      await supabase.auth.signOut();
+     setWatchlist([]);
+     setNotifications([]);
+     setDismissedAlerts([]);
      setActiveTab('discover');
   };
 
@@ -639,15 +675,15 @@ export default function App() {
                            </View>
                         )}
 
-                        <View style={{flexDirection: 'row', gap: 12, marginVertical: 24}}>
+                        <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginVertical: 24}}>
                            {!selectedDetails.showProviders ? (
-                              <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => fetchDetailsProviders(selectedDetails)}>
+                              <TouchableOpacity style={[styles.modalBtnPrimary, {flex: 1, minWidth: 140}]} onPress={() => fetchDetailsProviders(selectedDetails)}>
                                  {detailsProvidersLoading ? <ActivityIndicator color="#000" /> : <Text style={styles.modalBtnTextPrimary}>Watch Options</Text>}
                               </TouchableOpacity>
                            ) : null}
 
                            {!isReadOnly && (
-                              <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => toggleWatchlist(selectedDetails)}>
+                              <TouchableOpacity style={[styles.modalBtnSecondary, {flex: 1, minWidth: 140}]} onPress={() => toggleWatchlist(selectedDetails)}>
                                  <Text style={styles.modalBtnTextSecondary}>{isInWatchlist(selectedDetails.id) ? '★ Saved to List' : '☆ Save to List'}</Text>
                               </TouchableOpacity>
                            )}
@@ -733,8 +769,15 @@ export default function App() {
             {showAlerts && (
                <View style={styles.alertsDropdown}>
                   <Text style={styles.alertsTitle}>Recent Updates</Text>
-                  {notifications.length === 0 ? <Text style={{color: 'rgba(255,255,255,0.5)'}}>No new releases.</Text> : 
-                     notifications.map((msg, i) => <View key={i} style={styles.alertItem}><Text style={styles.alertText}>{msg}</Text></View>)
+                  {notifications.length === 0 ? <Text style={{color: 'rgba(255,255,255,0.5)'}}>No new alerts.</Text> : 
+                     notifications.map((n) => (
+                        <View key={n.id} style={styles.alertItem}>
+                           <Text style={styles.alertText}>{n.text}</Text>
+                           <TouchableOpacity onPress={() => dismissAlert(n.id)} style={{padding: 4}}>
+                              <Text style={{color: '#ef4444', fontWeight: 'bold', fontSize: 16}}>✕</Text>
+                           </TouchableOpacity>
+                        </View>
+                     ))
                   }
                </View>
             )}
@@ -758,80 +801,84 @@ export default function App() {
                ) : renderAuthUI()
             )}
 
-            {activeTab === 'watchlist' && !session && !sharedUserId && renderAuthUI()}
-
-            {activeTab === 'discover' && isQueryEmpty && !isReadOnly && (
-               <View style={styles.filtersWrapper}>
-                  <View style={styles.segmentedControl}>
-                     <TouchableOpacity style={[styles.segmentBtn, discoverType === 'movie' && styles.segmentBtnActive]} onPress={() => setDiscoverType('movie')}>
-                        <Text style={[styles.segmentText, discoverType === 'movie' && styles.segmentTextActive]}>Movies</Text>
-                     </TouchableOpacity>
-                     <TouchableOpacity style={[styles.segmentBtn, discoverType === 'tv' && styles.segmentBtnActive]} onPress={() => setDiscoverType('tv')}>
-                        <Text style={[styles.segmentText, discoverType === 'tv' && styles.segmentTextActive]}>TV Shows</Text>
-                     </TouchableOpacity>
-                  </View>
-
-                  <ScrollView 
-                     horizontal 
-                     showsHorizontalScrollIndicator={false} 
-                     style={isDesktop ? { alignSelf: 'center' } : {}}
-                     contentContainerStyle={styles.genreScroll}
-                  >
-                     {[{id: '', name: 'All Genres'}, {id: '28', name: 'Action'}, {id: '35', name: 'Comedy'}, {id: '18', name: 'Drama'}, {id: '878', name: 'Sci-Fi'}].map(g => (
-                        <TouchableOpacity key={g.id} style={[styles.genreChip, discoverGenre === g.id && styles.genreChipActive]} onPress={() => setDiscoverGenre(g.id)}>
-                           <Text style={[styles.genreText, discoverGenre === g.id && styles.genreTextActive]}>{g.name}</Text>
-                        </TouchableOpacity>
-                     ))}
-                  </ScrollView>
-               </View>
-            )}
-
-            {activeTab === 'watchlist' && watchlist.length > 0 && session && (
-               <View style={styles.filtersWrapper}>
-                  <View style={{flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap'}}>
-                     <View style={styles.segmentedControl}>
-                        <TouchableOpacity style={[styles.segmentBtn, filterType === 'All' && styles.segmentBtnActive]} onPress={() => setFilterType('All')}>
-                           <Text style={[styles.segmentText, filterType === 'All' && styles.segmentTextActive]}>All Types</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.segmentBtn, filterType === 'Movie' && styles.segmentBtnActive]} onPress={() => setFilterType('Movie')}>
-                           <Text style={[styles.segmentText, filterType === 'Movie' && styles.segmentTextActive]}>Movies</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.segmentBtn, filterType === 'TV' && styles.segmentBtnActive]} onPress={() => setFilterType('TV')}>
-                           <Text style={[styles.segmentText, filterType === 'TV' && styles.segmentTextActive]}>TV Shows</Text>
-                        </TouchableOpacity>
-                     </View>
-                     
-                     <TouchableOpacity style={styles.filterMenuBtn} onPress={() => setShowFiltersModal(true)}>
-                        <Text style={styles.filterMenuBtnText}>
-                           ⚙️ Filters {(filterOtt !== 'All' || filterLang !== 'All') && ' 🔴'}
-                        </Text>
-                     </TouchableOpacity>
-                  </View>
-               </View>
-            )}
-
-            {activeTab !== 'profile' && (
+            {activeTab === 'watchlist' && !session && !sharedUserId ? (
+               renderAuthUI()
+            ) : (
                <>
-                  {(isSearching || isDiscovering) && <ActivityIndicator size="large" color="#fff" style={{marginTop: 40}} />}
-                  
-                  {isReadOnly && activeTab === 'watchlist' && (
-                     <View style={{padding: 24, paddingBottom: 8}}>
-                        <Text style={{fontSize: 24, fontWeight: 'bold', color: '#fff'}}>Shared Watchlist</Text>
-                        <Text style={{color: 'rgba(255,255,255,0.6)'}}>Created by a Cinefile user. Sign up to build your own.</Text>
+                  {activeTab === 'discover' && isQueryEmpty && !isReadOnly && (
+                     <View style={styles.filtersWrapper}>
+                        <View style={styles.segmentedControl}>
+                           <TouchableOpacity style={[styles.segmentBtn, discoverType === 'movie' && styles.segmentBtnActive]} onPress={() => setDiscoverType('movie')}>
+                              <Text style={[styles.segmentText, discoverType === 'movie' && styles.segmentTextActive]}>Movies</Text>
+                           </TouchableOpacity>
+                           <TouchableOpacity style={[styles.segmentBtn, discoverType === 'tv' && styles.segmentBtnActive]} onPress={() => setDiscoverType('tv')}>
+                              <Text style={[styles.segmentText, discoverType === 'tv' && styles.segmentTextActive]}>TV Shows</Text>
+                           </TouchableOpacity>
+                        </View>
+
+                        <ScrollView 
+                           horizontal 
+                           showsHorizontalScrollIndicator={false} 
+                           style={isDesktop ? { alignSelf: 'center' } : {}}
+                           contentContainerStyle={styles.genreScroll}
+                        >
+                           {[{id: '', name: 'All Genres'}, {id: '28', name: 'Action'}, {id: '35', name: 'Comedy'}, {id: '18', name: 'Drama'}, {id: '878', name: 'Sci-Fi'}].map(g => (
+                              <TouchableOpacity key={g.id} style={[styles.genreChip, discoverGenre === g.id && styles.genreChipActive]} onPress={() => setDiscoverGenre(g.id)}>
+                                 <Text style={[styles.genreText, discoverGenre === g.id && styles.genreTextActive]}>{g.name}</Text>
+                              </TouchableOpacity>
+                           ))}
+                        </ScrollView>
                      </View>
                   )}
 
-                  <FlatList
-                     key={`grid-${numColumns}`}
-                     data={gridData}
-                     numColumns={numColumns}
-                     keyExtractor={(item: any, index: number) => item.id.toString() + index}
-                     renderItem={renderCinematicCard}
-                     contentContainerStyle={styles.gridContainer}
-                     columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
-                     showsVerticalScrollIndicator={false}
-                     ListHeaderComponent={() => isHeroActive ? renderHeroBanner(rawListData[0]) : null}
-                  />
+                  {activeTab === 'watchlist' && watchlist.length > 0 && session && (
+                     <View style={styles.filtersWrapper}>
+                        <View style={{flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap'}}>
+                           <View style={styles.segmentedControl}>
+                              <TouchableOpacity style={[styles.segmentBtn, filterType === 'All' && styles.segmentBtnActive]} onPress={() => setFilterType('All')}>
+                                 <Text style={[styles.segmentText, filterType === 'All' && styles.segmentTextActive]}>All Types</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity style={[styles.segmentBtn, filterType === 'Movie' && styles.segmentBtnActive]} onPress={() => setFilterType('Movie')}>
+                                 <Text style={[styles.segmentText, filterType === 'Movie' && styles.segmentTextActive]}>Movies</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity style={[styles.segmentBtn, filterType === 'TV' && styles.segmentBtnActive]} onPress={() => setFilterType('TV')}>
+                                 <Text style={[styles.segmentText, filterType === 'TV' && styles.segmentTextActive]}>TV Shows</Text>
+                              </TouchableOpacity>
+                           </View>
+                           
+                           <TouchableOpacity style={styles.filterMenuBtn} onPress={() => setShowFiltersModal(true)}>
+                              <Text style={styles.filterMenuBtnText}>
+                                 ⚙️ Filters {(filterOtt !== 'All' || filterLang !== 'All') && ' 🔴'}
+                              </Text>
+                           </TouchableOpacity>
+                        </View>
+                     </View>
+                  )}
+
+                  {activeTab !== 'profile' && (
+                     <>
+                        {(isSearching || isDiscovering) && <ActivityIndicator size="large" color="#fff" style={{marginTop: 40}} />}
+                        
+                        {isReadOnly && activeTab === 'watchlist' && (
+                           <View style={{padding: 24, paddingBottom: 8}}>
+                              <Text style={{fontSize: 24, fontWeight: 'bold', color: '#fff'}}>Shared Watchlist</Text>
+                              <Text style={{color: 'rgba(255,255,255,0.6)'}}>Created by a Cinefile user. Sign up to build your own.</Text>
+                           </View>
+                        )}
+
+                        <FlatList
+                           key={`grid-${numColumns}`}
+                           data={gridData}
+                           numColumns={numColumns}
+                           keyExtractor={(item: any, index: number) => item.id.toString() + index}
+                           renderItem={renderCinematicCard}
+                           contentContainerStyle={styles.gridContainer}
+                           columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
+                           showsVerticalScrollIndicator={false}
+                           ListHeaderComponent={() => isHeroActive ? renderHeroBanner(rawListData[0]) : null}
+                        />
+                     </>
+                  )}
                </>
             )}
          </View>
