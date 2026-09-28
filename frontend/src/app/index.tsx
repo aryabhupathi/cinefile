@@ -286,8 +286,20 @@ export default function App() {
   const extractProviders = (data: any) => {
      const inData = data.results?.IN || {};
      const usData = data.results?.US || {};
-     const extract = (d: any) => [...(d.flatrate || []), ...(d.free || []), ...(d.ads || []), ...(d.rent || []), ...(d.buy || [])];
+     
+     const addType = (arr: any[], type: string) => (arr || []).map(p => ({ ...p, access_type: type }));
+     
+     const extract = (d: any) => [
+        ...addType(d.free, 'Free'), 
+        ...addType(d.flatrate, 'Sub'), 
+        ...addType(d.ads, 'Ads'), 
+        ...addType(d.rent, 'Rent'), 
+        ...addType(d.buy, 'Buy')
+     ];
+     
      const combined = [...extract(inData), ...extract(usData)];
+     
+     // Deduplicate, keeping the FIRST found (Free > Sub > Ads > Rent > Buy, IN > US)
      return combined.filter((v,i,a) => a.findIndex(v2 => v2.provider_id === v.provider_id) === i);
   };
 
@@ -693,11 +705,14 @@ export default function App() {
                            <View style={styles.modalProviders}>
                               <Text style={{color: 'rgba(255,255,255,0.5)', marginBottom: 12, fontWeight: 'bold', letterSpacing: 1}}>AVAILABLE ON</Text>
                               {selectedDetails.providers?.length > 0 ? (
-                                 <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12}}>
+                                 <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 16}}>
                                     {selectedDetails.providers.map((p: any) => (
-                                       <TouchableOpacity key={p.provider_id} onPress={() => openProvider(p.provider_name, selectedDetails.title || selectedDetails.name)}>
-                                          <Image source={{ uri: `https://image.tmdb.org/t/p/w200${p.logo_path}` }} style={styles.modalProviderLogo} />
-                                       </TouchableOpacity>
+                                       <View key={p.provider_id} style={{alignItems: 'center'}}>
+                                          <TouchableOpacity onPress={() => openProvider(p.provider_name, selectedDetails.title || selectedDetails.name)}>
+                                             <Image source={{ uri: `https://image.tmdb.org/t/p/w200${p.logo_path}` }} style={styles.modalProviderLogo} />
+                                          </TouchableOpacity>
+                                          <Text style={{color: p.access_type === 'Rent' || p.access_type === 'Buy' ? '#f59e0b' : 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 4, fontWeight: 'bold'}}>{p.access_type ? p.access_type.toUpperCase() : ''}</Text>
+                                       </View>
                                     ))}
                                  </View>
                               ) : (
