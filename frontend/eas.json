@@ -1,8 +1,13 @@
 {
-  "build": {
-    "preview": {
-      "android": {
-        "buildType": "apk"
+  "expo": {
+    "name": "Cinefile",
+    ...
+    "android": {
+      "package": "com.cinefile.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "08677b5f-7ebf-467f-b7fb-056828a3f393"
       }
     }
   }
