@@ -918,7 +918,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingHorizontal: 24, zIndex: 10 },
   mobileLogo: { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: 1, marginRight: 16 },
   searchContainer: { flex: 1, flexDirection: 'row', backgroundColor: glassBackground, borderRadius: 100, borderWidth: 1, borderColor: glassBorder, alignItems: 'center', paddingHorizontal: 16, height: 48, maxWidth: 800, marginHorizontal: 'auto' },
-  searchInput: { flex: 1, color: '#fff', fontSize: 16, outlineStyle: 'none' },
+  searchInput: { flex: 1, color: '#fff', fontSize: 16, ...Platform.select({ web: { outlineStyle: 'none' as any }, default: {} }) },
   iconBtn: { padding: 8, justifyContent: 'center', alignItems: 'center' },
   iconText: { fontSize: 16, color: '#fff' },
   langText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
@@ -945,6 +945,7 @@ const styles = StyleSheet.create({
   gridRow: { gap: 16, marginBottom: 16 },
 
   cinemaCard: { flex: 1, aspectRatio: 2/3, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111', borderWidth: 1, borderColor: glassBorder, marginHorizontal: 4 },
+  cardImage: { ...StyleSheet.absoluteFillObject, resizeMode: 'cover' },
   cardGradient: { position: 'absolute', bottom: 0, width: '100%', height: '45%', backgroundColor: 'rgba(0,0,0,0.85)' },
   cardContent: { position: 'absolute', bottom: 0, width: '100%', padding: 12, height: '45%', justifyContent: 'flex-end' },
   cardTitle: { color: '#fff', fontSize: 14, fontWeight: '800', marginBottom: 2 },
