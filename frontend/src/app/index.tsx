@@ -491,15 +491,18 @@ export default function App() {
   };
 
   const isQueryEmpty = query.trim().length <= 2;
-  const rawListData = activeTab === 'watchlist' 
-     ? watchlist.filter(item => {
-          const matchType = filterType === 'All' || item.media_type === filterType.toLowerCase();
-          const matchLang = filterLang === 'All' || item.original_language === filterLang;
-          const matchOtt = filterOtt === 'All' || (item.providers && item.providers.some((p:any) => p.provider_name?.includes(filterOtt.split(' ')[0])));
-          return matchType && matchLang && matchOtt;
-       }) 
-     : (isQueryEmpty ? discoverResults : searchResults);
-
+  
+  const baseData = activeTab === 'watchlist' ? watchlist : (isQueryEmpty ? discoverResults : searchResults);
+  const rawListData = baseData.filter((item: any) => {
+     if (filterType !== 'All' && item.media_type !== filterType.toLowerCase()) return false;
+     
+     if (activeTab === 'watchlist') {
+        const matchLang = filterLang === 'All' || item.original_language === filterLang;
+        const matchOtt = filterOtt === 'All' || (item.providers && item.providers.some((p:any) => p.provider_name?.includes(filterOtt.split(' ')[0])));
+        return matchLang && matchOtt;
+     }
+     return true;
+  });
   const isHeroActive = isDesktop && isQueryEmpty && activeTab === 'discover' && rawListData.length > 0 && !isReadOnly;
   const gridData = isHeroActive ? rawListData.slice(1) : rawListData;
 
@@ -852,7 +855,7 @@ export default function App() {
                      </View>
                   )}
 
-                  {activeTab === 'watchlist' && watchlist.length > 0 && session && (
+                  {((activeTab === 'watchlist' && watchlist.length > 0 && session) || (!isQueryEmpty && !isReadOnly)) && (
                      <View style={styles.filtersWrapper}>
                         <View style={{flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap'}}>
                            <View style={styles.segmentedControl}>
@@ -867,11 +870,13 @@ export default function App() {
                               </TouchableOpacity>
                            </View>
                            
-                           <TouchableOpacity style={styles.filterMenuBtn} onPress={() => setShowFiltersModal(true)}>
-                              <Text style={styles.filterMenuBtnText}>
-                                 ⚙️ Filters {(filterOtt !== 'All' || filterLang !== 'All') && ' 🔴'}
-                              </Text>
-                           </TouchableOpacity>
+                           {activeTab === 'watchlist' && (
+                              <TouchableOpacity style={styles.filterMenuBtn} onPress={() => setShowFiltersModal(true)}>
+                                 <Text style={styles.filterMenuBtnText}>
+                                    ⚙️ Filters {(filterOtt !== 'All' || filterLang !== 'All') && ' 🔴'}
+                                 </Text>
+                              </TouchableOpacity>
+                           )}
                         </View>
                      </View>
                   )}
