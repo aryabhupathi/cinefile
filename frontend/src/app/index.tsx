@@ -735,7 +735,13 @@ export default function App() {
                   )}
                   {!isReadOnly && (
                      <View style={styles.searchContainer}>
-                        <TextInput style={styles.searchInput} placeholder="Search movies, tv, actors..." placeholderTextColor="rgba(255,255,255,0.5)" value={query} onChangeText={setQuery} />
+                        <TextInput 
+                           style={[styles.searchInput, Platform.OS === 'web' && { outlineStyle: 'none' as any }]} 
+                           placeholder="Search movies, tv, actors..." 
+                           placeholderTextColor="rgba(255,255,255,0.5)" 
+                           value={query} 
+                           onChangeText={setQuery} 
+                        />
                         
                         {query.length > 0 && (
                            <TouchableOpacity onPress={() => setQuery('')} style={styles.iconBtn}>
@@ -917,8 +923,8 @@ const styles = StyleSheet.create({
   
   topBar: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingHorizontal: 24, zIndex: 10 },
   mobileLogo: { fontSize: 20, fontWeight: '900', color: '#fff', letterSpacing: 1, marginRight: 16 },
-  searchContainer: { flexDirection: 'row', backgroundColor: glassBackground, borderRadius: 100, borderWidth: 1, borderColor: glassBorder, alignItems: 'center', paddingHorizontal: 16, height: 48, maxWidth: 800, width: '100%', alignSelf: 'center' },
-  searchInput: { flex: 1, color: '#fff', fontSize: 16, ...Platform.select({ web: { outlineStyle: 'none' as any }, default: {} }) },
+  searchContainer: { flexDirection: 'row', backgroundColor: glassBackground, borderRadius: 100, borderWidth: 1, borderColor: glassBorder, alignItems: 'center', paddingHorizontal: 16, height: 50, width: '100%' },
+  searchInput: { flex: 1, color: '#fff', fontSize: 16, height: '100%' },
   iconBtn: { padding: 8, justifyContent: 'center', alignItems: 'center' },
   iconText: { fontSize: 16, color: '#fff' },
   langText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
@@ -942,11 +948,11 @@ const styles = StyleSheet.create({
   genreTextActive: { color: '#000', fontWeight: '800' },
 
   gridContainer: { padding: 16, paddingBottom: 100 },
-  gridRow: { gap: 16, marginBottom: 16 },
+  gridRow: { justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 4 },
 
-  cinemaCard: { flex: 1, aspectRatio: 2/3, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111', borderWidth: 1, borderColor: glassBorder, marginHorizontal: 4 },
-  cardImage: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', resizeMode: 'cover' },
-  cardGradient: { position: 'absolute', bottom: 0, width: '100%', height: '45%', backgroundColor: 'rgba(0,0,0,0.85)' },
+  cinemaCard: { flex: 1, aspectRatio: 2/3, minHeight: 250, borderRadius: 16, overflow: 'hidden', backgroundColor: '#111', borderWidth: 1, borderColor: glassBorder, marginHorizontal: 6 },
+  cardImage: { position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, resizeMode: 'cover' },
+  cardGradient: { position: 'absolute', bottom: 0, width: '100%', height: '50%', backgroundColor: 'rgba(0,0,0,0.85)' },
   cardContent: { position: 'absolute', bottom: 0, width: '100%', padding: 12, height: '45%', justifyContent: 'flex-end' },
   cardTitle: { color: '#fff', fontSize: 14, fontWeight: '800', marginBottom: 2 },
   cardMeta: { color: 'rgba(255,255,255,0.7)', fontSize: 11 },
